@@ -6,6 +6,7 @@ import net.minecraft.client.toast.ToastManager;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 
+@SuppressWarnings("resource")
 public class MessageToast implements Toast {
     private static final Identifier TEXTURE = new Identifier("toast/advancement");
     private final Text title;
@@ -16,7 +17,7 @@ public class MessageToast implements Toast {
 
     @Override
     public Visibility draw(DrawContext context, ToastManager manager, long startTime) {
-        context.drawGuiTexture(TEXTURE, 0, 0, this.getWidth(), this.getHeight());
+        context.drawTexture(TEXTURE, 0, 0, 0, 0, this.getWidth(), this.getHeight());
         var text = manager.getClient().textRenderer.wrapLines(title, 140);
         if (text.size() == 1) {
             context.drawText(manager.getClient().textRenderer, text.get(0), 7, 13, 0xffffffff, false);

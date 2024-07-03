@@ -1,7 +1,6 @@
 package io.github.mattidragon.nodeflow.client.ui.widget;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import io.github.mattidragon.nodeflow.NodeFlow;
 import io.github.mattidragon.nodeflow.client.ui.NodeConfigScreenRegistry;
 import io.github.mattidragon.nodeflow.client.ui.screen.EditorScreen;
 import io.github.mattidragon.nodeflow.graph.Connector;
@@ -17,10 +16,17 @@ import net.minecraft.client.gui.screen.narration.NarrationMessageBuilder;
 import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.client.gui.widget.ClickableWidget;
 import net.minecraft.client.input.KeyCodes;
+import net.minecraft.client.render.BufferBuilder;
+import net.minecraft.client.render.BufferRenderer;
+import net.minecraft.client.render.GameRenderer;
+import net.minecraft.client.render.Tessellator;
+import net.minecraft.client.render.VertexFormat;
+import net.minecraft.client.render.VertexFormats;
 import net.minecraft.text.Text;
 import net.minecraft.text.Texts;
 import net.minecraft.util.Formatting;
 import org.jetbrains.annotations.Nullable;
+import org.joml.Matrix4f;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
@@ -171,39 +177,94 @@ public class NodeWidget extends ClickableWidget {
     }
 
     @Override
-    public void renderWidget(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void renderButton(DrawContext context, int mouseX, int mouseY, float delta) {
         var textRenderer = Screens.getTextRenderer(parent);
+        var matrix = context.getMatrices().peek().getPositionMatrix();
+        var segments = calculateSegments();
 
-        var texture = isFocused() ? NodeFlow.id("node_selected") : NodeFlow.id("node");
-        var tagColor = node.tag.getColor();
-        RenderSystem.setShaderColor((tagColor >> 16 & 0xff) / 256f, (tagColor >> 8 & 0xff) / 256f, (tagColor & 0xff) / 256f, 1);
-        context.drawGuiTexture(texture, getX(), getY(), width, height);
-        RenderSystem.setShaderColor(1, 1, 1, 1);
+        RenderSystem.setShader(GameRenderer::getPositionTexColorProgram);
+        RenderSystem.setShaderTexture(0, parent.texture);
+        BufferBuilder bufferBuilder = Tessellator.getInstance().getBuffer();
+        bufferBuilder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_TEXTURE_COLOR);
+
+        var uvOffset = this.isFocused() ? 64 : 32;
+        var columnCount = width / 16 - 1;
+        // Top bar
+        for (int i = 0; i < columnCount; i++) {
+            addQuad(matrix, getX() + 8 + i * 16, getY(), uvOffset + 8, 0, 16, 24);
+        }
+        addQuad(matrix, getX() + 8 + columnCount * 16, getY(), uvOffset + 8, 0, width - (16 + columnCount * 16), 24);
+
+        // Top corners
+        addQuad(matrix, getX(), getY(), uvOffset, 0, 8, 24);
+        addQuad(matrix, getX() + width - 8, getY(), uvOffset + 24, 0, 8, 24);
+
+        var status = 0xffffffff;
+        if (!node.isFullyConnected())
+            status = 0xffffaa55;
+        if (!node.validate().isEmpty())
+            status = 0xffffaa55;
+        if (NodeConfigScreenRegistry.hasConfig(node) && mouseX >= getX() + width - 20 && mouseX <= getX() + width - 4 && mouseY >= getY() + 4 && mouseY <= getY() + 20)
+            status = 0xff9999ff;
 
         // Status indicator / config button
-        if (!node.isFullyConnected())
-            context.setShaderColor(1, 2 / 3f, 1 / 3f, 1);
-        if (!node.validate().isEmpty())
-            context.setShaderColor(1, 2 / 3f, 1 / 3f, 1);
-        if (NodeConfigScreenRegistry.hasConfig(node) && mouseX >= getX() + width - 20 && mouseX <= getX() + width - 4 && mouseY >= getY() + 4 && mouseY <= getY() + 20)
-            context.setShaderColor(0.6f, 0.6f, 1, 1);
-
         if (!node.isFullyConnected() || !node.validate().isEmpty()) {
-            context.drawGuiTexture(NodeFlow.id("config_button_error"), getX() + width - 20, getY() + 4, 16, 16);
+            addQuad(matrix, getX() + width - 20, getY() + 4, 112, 4, 16, 16, status);
         } else if (NodeConfigScreenRegistry.hasConfig(node)) {
-            context.drawGuiTexture(NodeFlow.id("config_button"), getX() + width - 20, getY() + 4, 16, 16);
+            addQuad(matrix, getX() + width - 20, getY() + 4, 96, 4, 16, 16, status);
         }
-        context.setShaderColor(1, 1, 1, 1);
 
-        for (var segment : calculateSegments()) {
+        // Center rows
+        for (var segment : segments) {
+            // Fill
+            for (int i = 0; i < columnCount; i++) {
+                addQuad(matrix, getX() + 8 + i * 16, segment.y, uvOffset + 8, 8, 16, 12);
+            }
+            addQuad(matrix, getX() + 8 + columnCount * 16, segment.y, uvOffset + 8, 8, width - (16 + columnCount * 16), 12);
+
+            // Sides
+            addQuad(matrix, getX(), segment.y, uvOffset, 8, 8, 12);
+            addQuad(matrix, getX() + width - 8, segment.y, uvOffset + 24, 8, 8, 12);
+        }
+
+        // Bottom bar
+        for (int i = 0; i < columnCount; i++) {
+            addQuad(matrix, getX() + 8 + i * 16, getY() + 24 + segments.length * ROW_HEIGHT, uvOffset + 8, 24, 16, 8);
+        }
+        addQuad(matrix, getX() + 8 + columnCount * 16, getY() + 24 + segments.length * ROW_HEIGHT, uvOffset + 8, 24, width - (16 + columnCount * 16), 8);
+
+        // Bottom corners
+        addQuad(matrix, getX(), getY() + 24 + segments.length * ROW_HEIGHT, uvOffset, 24, 8, 8);
+        addQuad(matrix, getX() + width - 8, getY() + 24 + segments.length * ROW_HEIGHT, uvOffset + 24, 24, 8, 8);
+
+
+        BufferRenderer.drawWithGlobalProgram(bufferBuilder.end());
+
+        for (var segment : segments) {
             segment.render(context, mouseX, mouseY);
         }
 
         context.drawText(textRenderer, getMessage(), getX() + 7, getY() + 7, 0x404040, false);
+    }
 
-        if (isMouseOnButton(mouseX, mouseY) && tooltip != null) {
-            tooltip.render(hovered, isFocused(), new ScreenRect(getX() + width - 20, getY() + 4, 16, 16));
-        }
+    private static void addQuad(Matrix4f matrix, int x, int y, int u, int v, int width, int height) {
+        addQuad(matrix, x, y, u, v, width, height, 0xffffffff);
+    }
+
+    public static void addQuad(Matrix4f matrix, int x1, int y1, int u, int v, int width, int height, int color) {
+        int x2 = x1 + width;
+        int y2 = y1 + height;
+        float u1 = u / 256f;
+        float u2 = (u + width) / 256f;
+        float v1 = v / 256f;
+        float v2 = (v + height) / 256f;
+
+        BufferBuilder bufferBuilder = Tessellator.getInstance().getBuffer();
+
+        bufferBuilder.vertex(matrix, x1, y2, 0).texture(u1, v2).color(color).next();
+        bufferBuilder.vertex(matrix, x2, y2, 0).texture(u2, v2).color(color).next();
+        bufferBuilder.vertex(matrix, x2, y1, 0).texture(u2, v1).color(color).next();
+        bufferBuilder.vertex(matrix, x1, y1, 0).texture(u1, v1).color(color).next();
     }
 
     @Override
@@ -272,21 +333,26 @@ public class NodeWidget extends ClickableWidget {
 
         public void render(DrawContext context, int mouseX, int mouseY) {
             var textRenderer = Screens.getTextRenderer(parent);
+            var matrices = context.getMatrices();
+            var matrix = matrices.peek().getPositionMatrix();
+            boolean hovered = hasConnectorAt(mouseX, mouseY);
 
-            var brightness = hasConnectorAt(mouseX, mouseY) ? 2 : 1;
-            var color = this.connector.type().color();
-            var red = ((color & 0xff0000) >> 16) / 256f * brightness;
-            var green = ((color & 0x00ff00) >> 8) / 256f * brightness;
-            var blue = (color & 0x0000ff) / 256f * brightness;
+            RenderSystem.setShader(GameRenderer::getPositionTexColorProgram);
+            RenderSystem.setShaderTexture(0, parent.texture);
+            RenderSystem.setShaderColor(hovered ? 2 : 1, hovered ? 2 : 1, hovered ? 2 : 1, 1);
+            BufferBuilder bufferBuilder = Tessellator.getInstance().getBuffer();
+            bufferBuilder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_TEXTURE_COLOR);
 
-            context.setShaderColor(red, green, blue, 1);
-            context.drawGuiTexture(NodeFlow.id("connector"), getConnectorX(), getConnectorY(), 4, 4);
-            context.setShaderColor(1, 1, 1, 1);
+            addQuad(matrix, getConnectorX(), getConnectorY(), 96, 0, 4, 4, this.connector.type().color() | 0xff000000);
+
+            BufferRenderer.drawWithGlobalProgram(bufferBuilder.end());
+            RenderSystem.setShaderColor(1, 1, 1, 1);
 
             if (!isOutput)
                 context.drawText(textRenderer, this.connector.id(), x + 16, y + 2, 0x404040, false);
             else
-                context.drawText(textRenderer, this.connector.id(), x + width - 16 - textRenderer.getWidth(this.connector.id()), y + 2, 0x404040, false);
+                context.drawText(textRenderer, this.connector.id(),
+                        x + width - 16 - textRenderer.getWidth(this.connector.id()), y + 2, 0x404040, false);
         }
     }
 }

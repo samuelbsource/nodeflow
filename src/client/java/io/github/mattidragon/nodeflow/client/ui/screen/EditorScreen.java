@@ -18,6 +18,12 @@ import net.minecraft.client.gui.navigation.GuiNavigationPath;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.ElementListWidget;
+import net.minecraft.client.render.BufferBuilder;
+import net.minecraft.client.render.BufferRenderer;
+import net.minecraft.client.render.GameRenderer;
+import net.minecraft.client.render.Tessellator;
+import net.minecraft.client.render.VertexFormat;
+import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.screen.ScreenTexts;
 import net.minecraft.sound.SoundEvents;
@@ -25,6 +31,9 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 import org.jetbrains.annotations.Nullable;
+import org.joml.Matrix4f;
+
+import com.mojang.blaze3d.systems.RenderSystem;
 
 import java.util.*;
 
@@ -116,7 +125,7 @@ public class EditorScreen extends Screen {
             updateVisibility();
         }).dimensions(GRID_OFFSET + 110, BORDER_OFFSET - 20, 100, 20).build());
 
-        addMenu = addDrawableChild(new AddNodesWidget(client, getBoxWidth(), getBoxHeight() - 10, GRID_OFFSET + 10));
+        addMenu = addDrawableChild(new AddNodesWidget(client, getBoxWidth(), getBoxHeight(), GRID_OFFSET + 10, height - GRID_OFFSET - 10));
         updateAddButtons();
         updateVisibility();
     }
@@ -162,7 +171,6 @@ public class EditorScreen extends Screen {
         backButton.active = isAddingNode && activeGroup != null;
         backButton.visible = isAddingNode && activeGroup != null;
         addMenu.active = isAddingNode;
-        addMenu.visible = isAddingNode;
         deleteButton.active = !isAddingNode;
         deleteButton.visible = !isAddingNode;
         plusButton.active = !isDeletingNode;
@@ -258,12 +266,12 @@ public class EditorScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        if (super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount)) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+        if (super.mouseScrolled(mouseX, mouseY, amount)) {
             return true;
         }
         if (isAddingNode) {
-            addMenu.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+            addMenu.mouseScrolled(mouseX, mouseY, amount);
             return true;
         }
         return false;
@@ -349,21 +357,77 @@ public class EditorScreen extends Screen {
     }
 
     @Override
-    public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {
-        super.renderBackground(context, mouseX, mouseY, delta);
+    public void renderBackground(DrawContext context) {
+        super.renderBackground(context);
         renderArea(context);
     }
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        renderBackground(context, mouseX, mouseY, delta);
+        renderBackground(context);
+        for (var node : area.children())
+            node.updateTooltip();
 
         super.render(context, mouseX, mouseY, delta);
     }
 
     private void renderArea(DrawContext context) {
-        var texture = area.isFocused() && client != null && client.getNavigationType().isKeyboard() ? NodeFlow.id("editor_selected") : NodeFlow.id("editor");
-        context.drawGuiTexture(texture, BORDER_OFFSET, BORDER_OFFSET, getBoxWidth() + BORDER_SIZE * 2, getBoxHeight() + BORDER_SIZE * 2);
+        var rows = (this.height - GRID_OFFSET * 2) / TILE_SIZE;
+        var columns = (this.width - GRID_OFFSET * 2) / TILE_SIZE;
+        int boxHeight = getBoxHeight();
+        int boxWidth = getBoxWidth();
+
+        // DrawableHelper.drawTexture is too slow because it uses one draw call per call. We only need it at the end.
+        RenderSystem.setShader(GameRenderer::getPositionTexProgram);
+        RenderSystem.setShaderTexture(0, texture);
+        BufferBuilder bufferBuilder = Tessellator.getInstance().getBuffer();
+        bufferBuilder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_TEXTURE);
+
+        var matrix = context.getMatrices().peek().getPositionMatrix();
+        var vOffset = area.isFocused() ? 32 : 0;
+
+        // Draws the main grid
+        for (int x = 0; x < columns; x++) {
+            for (int y = 0; y < rows; y++) {
+                addTexturedQuad(matrix, GRID_OFFSET + TILE_SIZE * x, GRID_OFFSET + TILE_SIZE * y, 8, 8 + vOffset, 16, 16);
+            }
+        }
+
+        // Draws top and bottoms
+        for (int x = 0; x < columns; x++) {
+            addTexturedQuad(matrix, GRID_OFFSET + TILE_SIZE * x, BORDER_OFFSET, 8, vOffset, 16, 8);
+            addTexturedQuad(matrix, GRID_OFFSET + TILE_SIZE * x, GRID_OFFSET + boxHeight, 8, 24 + vOffset, 16, 8);
+        }
+
+        // Draws sides
+        for (int y = 0; y < rows; y++) {
+            addTexturedQuad(matrix, BORDER_OFFSET, GRID_OFFSET + TILE_SIZE * y, 0, 8 + vOffset, 8, 16);
+            addTexturedQuad(matrix, GRID_OFFSET + boxWidth, GRID_OFFSET + TILE_SIZE * y, 24, 8 + vOffset, 8, 16);
+        }
+
+        // Draws corners
+        addTexturedQuad(matrix, BORDER_OFFSET, BORDER_OFFSET, 0, vOffset, 8, 8);
+        addTexturedQuad(matrix, BORDER_OFFSET, GRID_OFFSET + boxHeight, 0, 24 + vOffset, 8, 8);
+        addTexturedQuad(matrix, GRID_OFFSET + boxWidth, BORDER_OFFSET , 24, vOffset, 8, 8);
+        addTexturedQuad(matrix, GRID_OFFSET + boxWidth, GRID_OFFSET + boxHeight, 24, 24 + vOffset, 8, 8);
+
+        BufferRenderer.drawWithGlobalProgram(bufferBuilder.end());
+    }
+
+    public static void addTexturedQuad(Matrix4f matrix, int x1, int y1, int u, int v, int width, int height) {
+        int x2 = x1 + width;
+        int y2 = y1 + height;
+        float u1 = u / 256f;
+        float u2 = (u + width) / 256f;
+        float v1 = v / 256f;
+        float v2 = (v + height) / 256f;
+
+        BufferBuilder bufferBuilder = Tessellator.getInstance().getBuffer();
+
+        bufferBuilder.vertex(matrix, x1, y2, 0).texture(u1, v2).next();
+        bufferBuilder.vertex(matrix, x2, y2, 0).texture(u2, v2).next();
+        bufferBuilder.vertex(matrix, x2, y1, 0).texture(u2, v1).next();
+        bufferBuilder.vertex(matrix, x1, y1, 0).texture(u1, v1).next();
     }
 
     public boolean isDeletingNode() {
@@ -381,11 +445,14 @@ public class EditorScreen extends Screen {
     }
 
     private static class AddNodesWidget extends ElementListWidget<AddNodesWidget.Entry> {
-        public AddNodesWidget(MinecraftClient client, int width, int height, int y) {
-            super(client, width, height, y, 30);
+        public boolean active = true;
+
+        public AddNodesWidget(MinecraftClient client, int width, int height, int top, int bottom) {
+            super(client, width, height, top, bottom, 30);
             setRenderBackground(false);
+            setRenderHorizontalShadows(false);
             centerListVertically = true;
-            setX(GRID_OFFSET);
+            left = GRID_OFFSET;
         }
 
         @Override
@@ -419,8 +486,14 @@ public class EditorScreen extends Screen {
         }
 
         @Override
+        public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+            if (!active) return;
+            super.render(context, mouseX, mouseY, delta);
+        }
+
+        @Override
         protected void renderList(DrawContext context, int mouseX, int mouseY, float delta) {
-            context.enableScissor(0, getY(), width + GRID_OFFSET, height + getY());
+            context.enableScissor(0, top, width + GRID_OFFSET, bottom);
             super.renderList(context, mouseX, mouseY, delta);
             context.disableScissor();
         }

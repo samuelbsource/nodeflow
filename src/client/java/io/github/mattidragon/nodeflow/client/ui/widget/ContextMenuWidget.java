@@ -22,6 +22,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
+@SuppressWarnings("resource")
 public class ContextMenuWidget extends AbstractParentElement implements Drawable {
     private final EditorAreaWidget area;
     public NodeWidget node;
@@ -131,7 +132,7 @@ public class ContextMenuWidget extends AbstractParentElement implements Drawable
                     .build());
         }
         var textRenderer = MinecraftClient.getInstance().textRenderer;
-        var textField = new TextFieldWidget(textRenderer, 100, 20, Text.empty());
+        var textField = new TextFieldWidget(textRenderer, 0, 0, 100, 20, Text.empty());
         textField.setPlaceholder(Text.translatable("nodeflow.editor.button.nick_placeholder").formatted(Formatting.GRAY));
         textField.setMaxLength(16);
         if (node.node.nickname != null) {

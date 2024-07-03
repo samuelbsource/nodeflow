@@ -55,7 +55,7 @@ public class ControlifyPlugin implements ControlifyProxy {
 
     @Override
     public void registerScreenType(Class<? extends EditorScreen> clazz) {
-        ScreenProcessorProvider.registerProvider(clazz, EditorScreenProcessor::new);
+        ScreenProcessorProvider.REGISTRY.register(clazz, EditorScreenProcessor::new);
     }
 
     private class EditorScreenProcessor extends ScreenProcessor<EditorScreen> {

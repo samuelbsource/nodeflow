@@ -14,7 +14,6 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtIo;
-import net.minecraft.nbt.NbtSizeTracker;
 import net.minecraft.util.Identifier;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
@@ -24,6 +23,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.*;
 
+@SuppressWarnings("resource")
 public class EditorAreaWidget extends ZoomableAreaWidget<NodeWidget> {
     private static final String CLIPBOARD_PREFIX = "nodeflow-node-v1:";
     private final EditorScreen parent;
@@ -122,7 +122,7 @@ public class EditorAreaWidget extends ZoomableAreaWidget<NodeWidget> {
         NbtCompound nbt;
         var bytes = new ByteArrayInputStream(clipboard.substring(CLIPBOARD_PREFIX.length()).getBytes());
         try (var in = Base64.getDecoder().wrap(bytes)) {
-            nbt = NbtIo.readCompressed(in, NbtSizeTracker.ofUnlimitedBytes());
+            nbt = NbtIo.readCompressed(in);
         } catch (IOException e) {
             NodeFlow.LOGGER.warn("Failed to paste node", e);
             return;

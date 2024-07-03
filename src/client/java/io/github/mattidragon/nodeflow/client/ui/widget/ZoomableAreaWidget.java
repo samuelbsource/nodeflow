@@ -119,6 +119,7 @@ public class ZoomableAreaWidget<T extends Element & Drawable & Narratable> exten
         if (super.mouseClicked(modifyX(mouseX), modifyY(mouseY), button)) {
             // Only children should be able to get focused
             //noinspection unchecked
+            @SuppressWarnings("unchecked")
             var focused = (T) getFocused();
             // If the node was deleted due to the click we don't want to add it back
             if (children.remove(focused)) {
@@ -155,12 +156,12 @@ public class ZoomableAreaWidget<T extends Element & Drawable & Narratable> exten
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
         if (!isMouseOver(mouseX, mouseY) || !active || !visible)
             return false;
-        if (super.mouseScrolled(modifyX(mouseX), modifyY(mouseY), horizontalAmount, verticalAmount))
+        if (super.mouseScrolled(modifyX(mouseX), modifyY(mouseY), amount))
             return true;
-        zoom((int) verticalAmount, mouseX, mouseY);
+        zoom((int) amount, mouseX, mouseY);
 
         return true;
     }

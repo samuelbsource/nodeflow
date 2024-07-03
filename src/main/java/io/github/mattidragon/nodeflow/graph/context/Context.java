@@ -21,6 +21,7 @@ public class Context {
         return new Builder();
     }
 
+    @SuppressWarnings("unchecked")
     public <T> T get(ContextType<T> type) {
         if (map.containsKey(type))
             // Only valid pairs can be inserted

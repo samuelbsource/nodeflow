@@ -89,6 +89,7 @@ public record GraphEnvironment(List<DataType<?>> allowedDataTypes, List<ContextT
         }
     }
 
+    @SuppressWarnings("unused")
     private static class DummyContext extends Context {
         private final List<ContextType<?>> list;
 

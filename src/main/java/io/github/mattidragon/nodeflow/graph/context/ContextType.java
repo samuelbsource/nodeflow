@@ -19,6 +19,7 @@ public record ContextType<T>(Class<T> type, ContextType<?>[] parents) {
     public static final ContextType<World> WORLD = register(new ContextType<>(World.class), NodeFlow.id("world"));
     public static final ContextType<ServerWorld> SERVER_WORLD = register(new ContextType<>(ServerWorld.class, new ContextType[]{ WORLD }), NodeFlow.id("server_world"));
     public static final ContextType<BlockPos> BLOCK_POS = register(new ContextType<>(BlockPos.class), NodeFlow.id("block_pos"));
+    @SuppressWarnings("unused")
     private static final ContextType<Void> DUMMY = register(new ContextType<>(Void.class), NodeFlow.id("dummy"));
 
     public ContextType(Class<T> type, ContextType<?>[] parents) {
